@@ -30,27 +30,14 @@ export class UserController {
     return this.userService.register(registerDto);
   }
 
-  @HttpCode(HttpStatus.OK)
   @Post('login')
-  login(@Body() loginDto: LoginDto) {
-    return this.userService.login(loginDto);
+  async login(@Body() loginDto: LoginDto) {
+    const { email, password } = loginDto;
+    return this.userService.login(email, password);
   }
 
-  @Post('email')
-  email(@Body() email: EmailDto) {
-    return this.userService.email(email);
+  @Post('verification')
+  async verificacionUser(@Body() body: { email: string; code: string }) {
+    return this.userService.verificationUser(body.email, body.code);
   }
-
-  @Patch('password')
-  @UseGuards(AuthGuard)
-  password(@Request() req, @Body() passDto: PasswordDto) {
-    return this.userService.password(req.user.email, passDto);
-  }
-
-  @Patch('tokens')
-  @UseGuards(AuthGuard)
-  token(@Request() req, @Body() isVerified: boolean) {
-    return this.userService.token(req.user.email, isVerified);
-  }
-
 }

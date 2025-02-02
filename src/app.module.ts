@@ -3,6 +3,7 @@ import { join } from 'path';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { UserModule } from './user/user.module';
+import { SubidaModule } from './subida/subida.module';
 import 'dotenv/config';
 
 @Module({
@@ -20,7 +21,8 @@ import 'dotenv/config';
       synchronize: true,
       ssl: { rejectUnauthorized: false },
     }),
-    UserModule
+    UserModule,
+    SubidaModule
   ],
 })
 export class AppModule { }
