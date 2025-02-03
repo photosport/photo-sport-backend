@@ -21,7 +21,7 @@ export class UserService {
   });
 
   private userPoolId = 'us-east-2_XlPMxr3EQ'; 
-  private clientId = 'h3dt6hcr269lf6i582jp0405l';
+  private clientId = 'h3dt6hcr269lf6i582jp0405l'; 
   private clientSecret = '6kqkdjgltjo2ueu9edmatd4a49lmqlj4c541q6hnhfs7h7uthjb';
 
   private generateSecretHash(username: string): string {
@@ -92,6 +92,8 @@ export class UserService {
         }),
       );
 
+      console.log(response, "response");
+
       const idToken = response.AuthenticationResult?.IdToken;
       const accessToken = response.AuthenticationResult?.AccessToken;
       const refreshToken = response.AuthenticationResult?.RefreshToken;
@@ -113,11 +115,14 @@ export class UserService {
     try {
       const result = await this.cognitoClient.send(
         new UpdateUserPoolClientCommand({
-          UserPoolId: this.userPoolId, // Tu User Pool ID
-          ClientId: this.clientId, // Tu App Client ID
+          UserPoolId: this.userPoolId,
+          ClientId: this.clientId,
           ExplicitAuthFlows: [
             'ALLOW_USER_PASSWORD_AUTH',
             'ALLOW_REFRESH_TOKEN_AUTH',
+            'ALLOW_ADMIN_USER_PASSWORD_AUTH',
+            'ALLOW_CUSTOM_AUTH',
+            'ALLOW_USER_SRP_AUTH',
           ],
         }),
       );
