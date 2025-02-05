@@ -14,11 +14,6 @@ import { UserService } from './user.service';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post('enable-auth-flow')
-  async enableAuthFlow() {
-    return this.userService.enableAuthFlow();
-  }
-
   @Post('register')
   register(@Body() registerDto: RegisterDto) {
     return this.userService.register(registerDto);

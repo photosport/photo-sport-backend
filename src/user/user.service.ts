@@ -12,6 +12,10 @@ import {
   ConfirmSignUpCommand,
   InitiateAuthCommand,
   UpdateUserPoolClientCommand,
+  AdminAddUserToGroupCommand,
+  AdminCreateUserCommand,
+  AdminSetUserMFAPreferenceCommand,
+  RespondToAuthChallengeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 
 @Injectable()
@@ -20,8 +24,8 @@ export class UserService {
     region: 'us-east-2',
   });
 
-  private userPoolId = 'us-east-2_XlPMxr3EQ'; 
-  private clientId = 'h3dt6hcr269lf6i582jp0405l'; 
+  private userPoolId = 'us-east-2_XlPMxr3EQ';
+  private clientId = 'h3dt6hcr269lf6i582jp0405l';
   private clientSecret = '6kqkdjgltjo2ueu9edmatd4a49lmqlj4c541q6hnhfs7h7uthjb';
 
   private generateSecretHash(username: string): string {
@@ -32,32 +36,27 @@ export class UserService {
       .digest('base64');
   }
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, groupName: string) {
     const { email, password, name, lastName } = registerDto;
-
+  
     try {
-      await this.cognitoClient.send(
-        new SignUpCommand({
-          ClientId: this.clientId,
-          Username: email,
-          Password: password,
-          SecretHash: this.generateSecretHash(email),
-          UserAttributes: [
-            { Name: 'email', Value: email },
-            { Name: 'name', Value: name },
-            { Name: 'family_name', Value: lastName },
-          ],
-        }),
+      await this.createUserWithMFA(
+        email,
+        password,
+        name,
+        lastName,
+        '+18095555555', 
+        groupName,
       );
-
+  
       return {
-        message:
-          'Usuario registrado en Cognito. Revisa tu correo para verificar la cuenta.',
+        message: `Usuario registrado en el grupo ${groupName} con MFA habilitado.`,
       };
     } catch (error) {
       throw new BadRequestException(error.message);
     }
   }
+  
 
   async verificationUser(email: string, code: string) {
     try {
@@ -78,7 +77,7 @@ export class UserService {
   }
 
   async login(email: string, password: string) {
-    console.log(email, password);
+
     try {
       const response = await this.cognitoClient.send(
         new InitiateAuthCommand({
@@ -92,12 +91,9 @@ export class UserService {
         }),
       );
 
-      console.log(response, "response");
-
       const idToken = response.AuthenticationResult?.IdToken;
       const accessToken = response.AuthenticationResult?.AccessToken;
       const refreshToken = response.AuthenticationResult?.RefreshToken;
-
       return {
         message: 'Inicio de sesión exitoso.',
         idToken,
@@ -111,28 +107,83 @@ export class UserService {
     }
   }
 
-  async enableAuthFlow() {
+  async addUserToGroup(email: string, groupName: string) {
     try {
-      const result = await this.cognitoClient.send(
-        new UpdateUserPoolClientCommand({
-          UserPoolId: this.userPoolId,
-          ClientId: this.clientId,
-          ExplicitAuthFlows: [
-            'ALLOW_USER_PASSWORD_AUTH',
-            'ALLOW_REFRESH_TOKEN_AUTH',
-            'ALLOW_ADMIN_USER_PASSWORD_AUTH',
-            'ALLOW_CUSTOM_AUTH',
-            'ALLOW_USER_SRP_AUTH',
-          ],
-        }),
-      );
-      console.log('Flujo de autenticación habilitado:', result);
-      return { message: 'Flujo de autenticación habilitado correctamente.' };
+      const command = new AdminAddUserToGroupCommand({
+        UserPoolId: this.userPoolId,
+        Username: email,
+        GroupName: groupName,
+      });
+  
+      await this.cognitoClient.send(command);
+      return { message: `Usuario agregado al grupo ${groupName}.` };
     } catch (error) {
-      console.error('Error al habilitar el flujo de autenticación:', error);
+      console.error('Error al agregar al usuario al grupo:', error);
       throw new BadRequestException(
-        'No se pudo habilitar el flujo de autenticación.',
+        `No se pudo agregar al usuario al grupo ${groupName}.`,
       );
     }
   }
+
+  async createUserWithMFA(email: string, password: string, name: string, lastName: string, phoneNumber: string, groupName: string) {
+    try {
+
+      const createUserCommand = new AdminCreateUserCommand({
+        UserPoolId: this.userPoolId,
+        Username: email,
+        UserAttributes: [
+          { Name: 'email', Value: email },
+          { Name: 'name', Value: name },
+          { Name: 'family_name', Value: lastName },
+          { Name: 'phone_number', Value: phoneNumber },
+        ],
+        TemporaryPassword: password,
+      });
+      await this.cognitoClient.send(createUserCommand);
+      
+      const enableMFACommand = new AdminSetUserMFAPreferenceCommand({
+        UserPoolId: this.userPoolId,
+        Username: email,
+        SMSMfaSettings: {
+          Enabled: true,
+          PreferredMfa: true,
+        },
+      });
+      await this.cognitoClient.send(enableMFACommand);
+  
+      await this.addUserToGroup(email, groupName);
+  
+      return { message: 'Usuario creado con MFA y asignado a un grupo.' };
+    } catch (error) {
+      console.error('Error al crear usuario con MFA:', error);
+      throw new BadRequestException('No se pudo crear el usuario con MFA.');
+    }
+  }
+  
+  async respondToMFAChallenge(session: string, mfaCode: string, email: string) {
+    try {
+      const response = await this.cognitoClient.send(
+        new RespondToAuthChallengeCommand({
+          ClientId: this.clientId,
+          ChallengeName: 'SMS_MFA',
+          Session: session,
+          ChallengeResponses: {
+            USERNAME: email,
+            SMS_MFA_CODE: mfaCode,
+          },
+        }),
+      );
+  
+      return {
+        message: 'Autenticación MFA completada.',
+        tokens: response.AuthenticationResult,
+      };
+    } catch (error) {
+      console.error('Error al completar MFA:', error);
+      throw new UnauthorizedException('Error en la autenticación MFA.');
+    }
+  }
+  
+  
+
 }
